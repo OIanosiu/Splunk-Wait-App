@@ -19,13 +19,13 @@ module.exports = async function (context, req) {
   ${metaRefresh}
   <style>
     :root{
-      --bg:#003d5c;       /* NTS background */
+      --bg:#003d5c;       /* NTS dark background */
       --card:#ffffff;     /* white card */
       --fg:#0f172a;       /* dark text */
-      --muted:#5b6b7a;    /* secondary */
-      --brand:#003d5c;    /* NTS dark blue */
-      --shadow: 0 10px 25px rgba(0,0,0,.1);
-      --radius:12px;
+      --muted:#5b6b7a;    /* secondary text */
+      --brand:#003d5c;    /* NTS blue */
+      --shadow: 0 8px 20px rgba(0,0,0,.15);
+      --radius:6px;
     }
     html,body{height:100%}
     body{
@@ -45,6 +45,11 @@ module.exports = async function (context, req) {
       padding:32px 28px;
       text-align:center;
     }
+    .logo{
+      margin:0 auto 20px;
+      display:block;
+      height:50px;
+    }
     h1{font-size:20px;font-weight:600;margin:0 0 10px}
     p{margin:6px 0;color:var(--muted)}
     .spinner{
@@ -54,12 +59,25 @@ module.exports = async function (context, req) {
       animation:spin 1s linear infinite;
     }
     @keyframes spin{to{transform:rotate(360deg)}}
-    .kbd{font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f0f3f9;border:1px solid #e3e8f4;border-radius:6px;padding:6px 10px;display:inline-block}
-    .actions{margin-top:18px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+    .kbd{font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f0f3f9;border:1px solid #e3e8f4;border-radius:4px;padding:4px 8px;display:inline-block}
+    .actions{margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
     .btn{
-      appearance:none;border:1px solid #dbe3f1;background:#fff;border-radius:8px;padding:10px 14px;cursor:pointer;
+      appearance:none;
+      border:none;
+      background:var(--brand);
+      color:#fff;
+      font-weight:600;
+      border-radius:4px;
+      padding:10px 18px;
+      cursor:pointer;
+      transition:background .2s ease;
     }
-    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn:hover{background:#005080;}
+    .btn.secondary{
+      background:#e0e0e0;
+      color:#000;
+    }
+    .btn.secondary:hover{background:#cfcfcf;}
     .foot{margin-top:22px;font-size:12px;color:var(--muted)}
   </style>
   <script>
@@ -84,14 +102,16 @@ module.exports = async function (context, req) {
 </head>
 <body>
   <main class="card" role="status" aria-live="polite" aria-atomic="true">
+    <img class="logo" src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75" alt="NTS Logo" />
+    
     <h1>${title}</h1>
     <div class="spinner" aria-hidden="true"></div>
     <p>${subtitle}</p>
     <p class="muted">This page will ${returnUrl ? "redirect" : "refresh"} in <span id="count" class="kbd">${seconds}</span> seconds.</p>
 
     <div class="actions">
-      <button class="btn" onclick="location.reload()">Refresh now</button>
-      ${returnUrl ? `<button class="btn primary" onclick="location.href=${JSON.stringify(returnUrl)}">Continue</button>` : ""}
+      <button class="btn secondary" onclick="location.reload()">Refresh now</button>
+      ${returnUrl ? `<button class="btn" onclick="location.href=${JSON.stringify(returnUrl)}">Continue</button>` : ""}
     </div>
 
     <div class="foot">If this is your first time logging in to Splunk, please try again. Otherwise, contact your support team.</div>
