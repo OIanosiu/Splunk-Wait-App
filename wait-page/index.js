@@ -1,13 +1,14 @@
 module.exports = async function (context, req) {
+  // Config (URL params override app settings)
   const seconds = Number(req.query.s || process.env.AUTO_RETRY_SECONDS || 10);
   const returnUrl = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
 
   const title = "Please wait while we complete setup…";
   const subtitle = "Your access will be ready in a moment.";
 
-  const refreshTarget = returnUrl ? returnUrl : "";
-  const metaRefresh = refreshTarget
-    ? `<meta http-equiv="refresh" content="${seconds};url=${refreshTarget}">`
+  // Meta refresh (fallback if JS is blocked)
+  const metaRefresh = returnUrl
+    ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
     : `<meta http-equiv="refresh" content="${seconds}">`;
 
   const html = `<!doctype html>
@@ -17,22 +18,25 @@ module.exports = async function (context, req) {
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
   ${metaRefresh}
+  <!-- Inter font (like register.nts.eu) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{
       --bg:#003d5c;       /* NTS dark background */
       --card:#ffffff;     /* white card */
       --fg:#0f172a;       /* dark text */
       --muted:#5b6b7a;    /* secondary text */
-      --brand:#003d5c;    /* NTS blue */
+      --brand:#003d5c;    /* NTS blue (buttons, spinner) */
       --shadow: 0 8px 20px rgba(0,0,0,.15);
       --radius:6px;
     }
+    * { box-sizing: border-box }
     html,body{height:100%}
     body{
       margin:0;
       background:var(--bg);
       color:var(--fg);
-      font:16px/1.4 "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font:16px/1.5 "Inter","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
       display:grid;
       place-items:center;
       padding:24px;
@@ -59,50 +63,46 @@ module.exports = async function (context, req) {
       animation:spin 1s linear infinite;
     }
     @keyframes spin{to{transform:rotate(360deg)}}
-    .kbd{font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f0f3f9;border:1px solid #e3e8f4;border-radius:4px;padding:4px 8px;display:inline-block}
-    .actions{margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .kbd{
+      font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      background:#f0f3f9;border:1px solid #e3e8f4;border-radius:4px;
+      padding:4px 8px;display:inline-block
+    }
+    .actions{
+      margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap
+    }
     .btn{
-      appearance:none;
-      border:none;
-      background:var(--brand);
-      color:#fff;
-      font-weight:600;
-      border-radius:4px;
-      padding:10px 18px;
-      cursor:pointer;
-      transition:background .2s ease;
+      appearance:none;border:none;background:var(--brand);color:#fff;
+      font-weight:600;border-radius:4px;padding:10px 18px;cursor:pointer;
+      transition:background .2s ease
     }
-    .btn:hover{background:#005080;}
+    .btn:hover{background:#005080}
     .btn.secondary{
-      background:#e0e0e0;
-      color:#000;
+      background:#e0e0e0;color:#000
     }
-    .btn.secondary:hover{background:#cfcfcf;}
+    .btn.secondary:hover{background:#cfcfcf}
     .foot{margin-top:22px;font-size:12px;color:var(--muted)}
   </style>
   <script>
+    // Live countdown + refresh/redirect
     (function(){
       var seconds = ${seconds};
-      var el = null;
       function tick(){
-        if(!el){ el = document.getElementById('count'); }
-        if(el){ el.textContent = seconds; }
+        var el = document.getElementById('count');
+        if(el) el.textContent = seconds;
         if(seconds <= 0){
-          ${returnUrl
-            ? `location.href = ${JSON.stringify(returnUrl)};`
-            : `location.reload();`
-          }
-        } else {
-          seconds--; setTimeout(tick, 1000);
-        }
+          ${returnUrl ? `location.href=${JSON.stringify(returnUrl)};` : `location.reload();`}
+        } else { seconds--; setTimeout(tick, 1000); }
       }
-      window.addEventListener('DOMContentLoaded', tick);
+      addEventListener('DOMContentLoaded', tick);
     })();
   </script>
 </head>
 <body>
   <main class="card" role="status" aria-live="polite" aria-atomic="true">
-    <img class="logo" src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75" alt="NTS Logo" />
+    <img class="logo"
+         src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75"
+         alt="NTS Logo" />
     
     <h1>${title}</h1>
     <div class="spinner" aria-hidden="true"></div>
@@ -129,3 +129,7 @@ module.exports = async function (context, req) {
     body: html
   };
 };
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
