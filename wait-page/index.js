@@ -79,8 +79,7 @@ module.exports = async function (context, req) {
     <p>${subtitle}</p>
 
     <div class="foot">
-      If this is your first time logging in to Splunk, please try again. 
-      Otherwise, contact your support team.
+      If you applications are not available after the page refreshes, please contact your support team.
     </div>
   </main>
 </body>
