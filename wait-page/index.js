@@ -114,7 +114,7 @@ module.exports = async function (context, req) {
       ${returnUrl ? `<button class="btn" onclick="location.href=${JSON.stringify(returnUrl)}">Continue</button>` : ""}
     </div>
 
-    <div class="foot">If this is your first time logging in to Splunk, please try again. Otherwise, contact your support team.</div>
+    <div class="foot">If you applications are not available after the page refreshes, please contact your support team.</div>
   </main>
 </body>
 </html>`;
