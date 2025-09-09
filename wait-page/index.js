@@ -9,7 +9,7 @@ module.exports = async function (context, req) {
   // meta refresh fallback (kept for robustness)
   const metaRefresh = returnUrl
   ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
-  : "";
+  : `<meta http-equiv="refresh" content="${seconds}">`;
 
   const html = `<!doctype html>
 <html lang="en">
