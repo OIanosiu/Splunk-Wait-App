@@ -1,6 +1,3 @@
-// Azure Function that checks if a user is assigned to an Okta app via API
-// NOTE: You must store the Okta API token and domain securely (e.g., in environment variables)
-
 const https = require("https");
 
 module.exports = async function (context, req) {
