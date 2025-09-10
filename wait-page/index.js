@@ -15,22 +15,23 @@ module.exports = async function (context, req) {
 
   let assigned = null;
   let userId = null;
+  let errorMessage = "";
 
   if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userEmail) {
     try {
       userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userEmail);
       if (userId) {
         assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, APP_ID, userId);
+      } else {
+        errorMessage = "User not found in Okta.";
       }
     } catch (err) {
       context.log("Error during assignment check:", err);
+      errorMessage = "Error while checking user assignment.";
     }
+  } else {
+    errorMessage = "Missing required parameters or environment variables.";
   }
-
-  const shouldRedirect = assigned === true && returnUrl;
-  const metaRefresh = shouldRedirect
-    ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
-    : "";
 
   const html = `<!doctype html>
 <html lang="en">
@@ -38,7 +39,7 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  ${metaRefresh}
+  ${assigned === true && returnUrl ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">` : ""}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
@@ -67,11 +68,11 @@ module.exports = async function (context, req) {
   </style>
   <script>
     (function(){
-      var seconds = ${Number(seconds)};
-      var max = ${Number(maxAttempts)};
+      var seconds = ${seconds};
+      var max = ${maxAttempts};
       var assigned = ${assigned === true};
       var returnUrl = ${JSON.stringify(returnUrl)};
-      var key = 'retry:' + location.pathname + location.search;
+      var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
       if (assigned && returnUrl) {
@@ -80,8 +81,11 @@ module.exports = async function (context, req) {
       } else {
         attempts++;
         sessionStorage.setItem(key, String(attempts));
-        if (attempts <= max) {
+        if (attempts < max) {
           setTimeout(() => location.reload(), seconds * 1000);
+        } else {
+          var errElem = document.getElementById("final-error");
+          if (errElem) errElem.classList.remove("hide");
         }
       }
     })();
@@ -95,8 +99,12 @@ module.exports = async function (context, req) {
     <h1>${title}</h1>
     <div class="spinner" aria-hidden="true"></div>
     <p>${subtitle}</p>
-    ${assigned === false ? `<p class="error">You are not assigned to this application.</p>` : ""}
-    <div class="foot">If your applications are not available after the page refreshes, please contact your support team.</div>
+
+    <p id="final-error" class="error hide">You are not assigned to this application.</p>
+
+    <div class="foot">
+      If your applications are not available after the page refreshes, please contact your support team.
+    </div>
   </main>
 </body>
 </html>`;
@@ -111,6 +119,8 @@ module.exports = async function (context, req) {
     body: html
   };
 };
+
+// -------------------- HELPERS --------------------
 
 function toNum(...vals) {
   for (const v of vals) {
