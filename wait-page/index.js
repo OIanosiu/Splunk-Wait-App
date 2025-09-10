@@ -8,7 +8,7 @@ module.exports = async function (context, req) {
   const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
   const returnUrl = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
-  const userEmail = (req.query.user || "").trim();
+  const userParam = (req.query.user || "").trim(); // 
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
@@ -17,9 +17,16 @@ module.exports = async function (context, req) {
   let userId = null;
   let errorMessage = "";
 
-  if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userEmail) {
+  if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userParam) {
     try {
-      userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userEmail);
+      // NEW: detect if `userParam` is already an Okta userId (starts with 00u)
+      if (userParam.startsWith("00u")) {
+        userId = userParam;
+      } else {
+        // otherwise treat as email and look up userId
+        userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userParam);
+      }
+
       if (userId) {
         assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, APP_ID, userId);
       } else {
