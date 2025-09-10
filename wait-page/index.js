@@ -1,15 +1,10 @@
 module.exports = async function (context, req) {
-  const seconds     = toNum(req.query.s,   process.env.AUTO_RETRY_SECONDS, 5);
+  const seconds     = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
   const returnUrl   = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
-
-  // Only add meta refresh if a return URL exists. Otherwise JS handles retry with a cap.
-  const metaRefresh = returnUrl
-    ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
-    : "";
 
   const html = `<!doctype html>
 <html lang="en">
@@ -17,7 +12,6 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  ${metaRefresh}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
@@ -53,13 +47,15 @@ module.exports = async function (context, req) {
       var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
-      function refreshOnce(){
-        if (returnUrl) { location.href = returnUrl; }
-        else { location.reload(); }
+      function refreshOnce() {
+        if (returnUrl) {
+          location.href = returnUrl;
+        } else {
+          location.reload();
+        }
       }
 
-      function maybeRefresh(){
-        // show warning only when no return URL was supplied
+      function maybeRefresh() {
         if (!returnUrl) {
           var warn = document.getElementById('no-return');
           if (warn) warn.classList.remove('hide');
@@ -67,10 +63,17 @@ module.exports = async function (context, req) {
 
         attempts++;
         sessionStorage.setItem(key, String(attempts));
-        if (attempts <= maxAttempts) {
+
+        if (attempts < maxAttempts) {
           setTimeout(refreshOnce, seconds * 1000);
+        } else if (attempts === maxAttempts && returnUrl) {
+          // Final attempt: try redirect
+          setTimeout(() => { location.href = returnUrl; }, seconds * 1000);
+        } else {
+          // No return URL and max reached: show message
+          var final = document.getElementById('final-msg');
+          if (final) final.classList.remove('hide');
         }
-        // else: stop quietly on the page (no loop)
       }
 
       window.addEventListener('DOMContentLoaded', maybeRefresh);
@@ -94,6 +97,10 @@ module.exports = async function (context, req) {
     <div class="foot">
       If your applications are not available after the page refreshes, please contact your support team.
     </div>
+
+    <div id="final-msg" class="foot hide">
+      You are not assigned to this application. Please contact your support team.
+    </div>
   </main>
 </body>
 </html>`;
@@ -109,14 +116,18 @@ module.exports = async function (context, req) {
   };
 };
 
-function toNum(...vals){
-  for (const v of vals){
+// Helper functions
+function toNum(...vals) {
+  for (const v of vals) {
     if (v === undefined || v === null || v === '') continue;
     const n = Number(v);
     if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
   return 0;
 }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }));
 }
