@@ -1,10 +1,35 @@
+// Azure Function that checks if a user is assigned to an Okta app via API
+// NOTE: You must store the Okta API token and domain securely (e.g., in environment variables)
+
+const https = require("https");
+
 module.exports = async function (context, req) {
-  const seconds     = toNum(req.query.s,   process.env.AUTO_RETRY_SECONDS, 5);
+  const OKTA_API_TOKEN = process.env.OKTA_API_TOKEN;
+  const OKTA_DOMAIN = process.env.OKTA_DOMAIN; // 
+  const APP_ID = process.env.OKTA_APP_ID; // 
+
+  const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
-  const returnUrl   = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
+  const returnUrl = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
+  const userId = req.query.user; // <- You must provide this in the query for now
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
+
+  let assigned = null;
+
+  if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userId) {
+    try {
+      assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, APP_ID, userId);
+    } catch (err) {
+      context.log("Assignment check failed:", err);
+    }
+  }
+
+  const shouldRedirect = assigned === true && returnUrl;
+  const metaRefresh = shouldRedirect
+    ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
+    : "";
 
   const html = `<!doctype html>
 <html lang="en">
@@ -12,79 +37,22 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  ${metaRefresh}
   <style>
-    :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
-    *{box-sizing:border-box}
-    html,body{height:100%; overflow:hidden}
-    body{
-      margin:0; background:var(--bg); color:var(--fg);
-      font:16px/1.5 "Inter","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
-      display:grid; place-items:center; padding:24px;
-    }
-    .card{
-      width:min(600px, 92vw); max-height:90vh; overflow:hidden;
-      background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
-      padding:32px 28px; text-align:center;
-    }
-    .logo{margin:0 auto 20px; display:block; height:50px}
-    h1{font-size:20px; font-weight:600; margin:0 0 10px}
-    p{margin:6px 0; color:var(--muted)}
-    .spinner{
-      margin:20px auto; width:40px; height:40px; border-radius:50%;
-      border:4px solid #d6e4ff; border-top-color:var(--brand); animation:spin 1s linear infinite;
-    }
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .foot{margin-top:22px; font-size:12px; color:var(--muted)}
-    .banner{margin:-6px 0 12px; padding:8px 10px; border-radius:6px; background:#fff7ed; border:1px solid #fed7aa; color:var(--warn); font-size:13px}
-    .hide{display:none}
+    body { margin:0; font-family:sans-serif; display:grid; place-items:center; height:100vh; background:#003d5c; color:#fff }
+    .card { background:white; color:black; padding:2rem; border-radius:8px; max-width:500px; text-align:center; }
+    .spinner { width:40px; height:40px; border:4px solid #ccc; border-top-color:#003d5c; border-radius:50%; animation:spin 1s linear infinite; margin:20px auto; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .foot { font-size:12px; color:#888; margin-top:1rem; }
   </style>
-  <script>
-    (function(){
-      var seconds = ${Number(seconds)};
-      var maxAttempts = ${Number(maxAttempts)};
-      var returnUrl = ${JSON.stringify(returnUrl)};
-      var key = 'nts-wait-attempts:' + location.pathname + location.search;
-      var attempts = Number(sessionStorage.getItem(key) || '0');
-
-      var warn = document.getElementById('no-return');
-
-      attempts++;
-      sessionStorage.setItem(key, String(attempts));
-
-      if (attempts <= maxAttempts) {
-        setTimeout(function(){
-          if (returnUrl) {
-            location.href = returnUrl;
-          } else {
-            location.reload();
-          }
-        }, seconds * 1000);
-      } else {
-        // show warning when we stop retrying
-        var banner = document.getElementById('no-return');
-        if (banner) banner.classList.remove('hide');
-      }
-    })();
-  </script>
 </head>
 <body>
-  <main class="card" role="status" aria-live="polite" aria-atomic="true">
-    <img class="logo"
-         src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75"
-         alt="NTS Logo" />
-
-    <div id="no-return" class="banner hide">
-      You are not assigned to this application. Please contact your support team.
-    </div>
-
+  <main class="card">
     <h1>${title}</h1>
-    <div class="spinner" aria-hidden="true"></div>
+    <div class="spinner"></div>
     <p>${subtitle}</p>
-
-    <div class="foot">
-      If your applications are not available after the page refreshes, please contact your support team.
-    </div>
+    ${assigned === false ? `<p style="color: darkred; margin-top: 1rem">You are not assigned to this application.</p>` : ""}
+    <div class="foot">If your applications are not available after this, please contact your support team.</div>
   </main>
 </body>
 </html>`;
@@ -100,14 +68,38 @@ module.exports = async function (context, req) {
   };
 };
 
-function toNum(...vals){
-  for (const v of vals){
+function toNum(...vals) {
+  for (const v of vals) {
     if (v === undefined || v === null || v === '') continue;
     const n = Number(v);
     if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
   return 0;
 }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+function isUserAssignedToApp(oktaDomain, token, appId, userId) {
+  const url = `${oktaDomain}/api/v1/apps/${appId}/users/${userId}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `SSWS ${token}`,
+        "Accept": "application/json"
+      }
+    }, res => {
+      if (res.statusCode === 200) resolve(true);
+      else if (res.statusCode === 404) resolve(false);
+      else reject(new Error(`Unexpected status: ${res.statusCode}`));
+    });
+
+    req.on("error", reject);
+    req.end();
+  });
 }
