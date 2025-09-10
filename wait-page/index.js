@@ -1,5 +1,5 @@
 module.exports = async function (context, req) {
-  const seconds     = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
+  const seconds     = toNum(req.query.s,   process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
   const returnUrl   = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
 
@@ -47,36 +47,24 @@ module.exports = async function (context, req) {
       var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
-      function refreshOnce() {
-        if (returnUrl) {
-          location.href = returnUrl;
-        } else {
-          location.reload();
-        }
+      var warn = document.getElementById('no-return');
+
+      attempts++;
+      sessionStorage.setItem(key, String(attempts));
+
+      if (attempts <= maxAttempts) {
+        setTimeout(function(){
+          if (returnUrl) {
+            location.href = returnUrl;
+          } else {
+            location.reload();
+          }
+        }, seconds * 1000);
+      } else {
+        // show warning when we stop retrying
+        var banner = document.getElementById('no-return');
+        if (banner) banner.classList.remove('hide');
       }
-
-      function maybeRefresh() {
-        if (!returnUrl) {
-          var warn = document.getElementById('no-return');
-          if (warn) warn.classList.remove('hide');
-        }
-
-        attempts++;
-        sessionStorage.setItem(key, String(attempts));
-
-        if (attempts < maxAttempts) {
-          setTimeout(refreshOnce, seconds * 1000);
-        } else if (attempts === maxAttempts && returnUrl) {
-          // Final attempt: try redirect
-          setTimeout(() => { location.href = returnUrl; }, seconds * 1000);
-        } else {
-          // No return URL and max reached: show message
-          var final = document.getElementById('final-msg');
-          if (final) final.classList.remove('hide');
-        }
-      }
-
-      window.addEventListener('DOMContentLoaded', maybeRefresh);
     })();
   </script>
 </head>
@@ -87,7 +75,7 @@ module.exports = async function (context, req) {
          alt="NTS Logo" />
 
     <div id="no-return" class="banner hide">
-      No return URL was provided. We’ll retry a few times and then stop.
+      You are not assigned to this application. Please contact your support team.
     </div>
 
     <h1>${title}</h1>
@@ -96,10 +84,6 @@ module.exports = async function (context, req) {
 
     <div class="foot">
       If your applications are not available after the page refreshes, please contact your support team.
-    </div>
-
-    <div id="final-msg" class="foot hide">
-      You are not assigned to this application. Please contact your support team.
     </div>
   </main>
 </body>
@@ -116,18 +100,14 @@ module.exports = async function (context, req) {
   };
 };
 
-// Helper functions
-function toNum(...vals) {
-  for (const v of vals) {
+function toNum(...vals){
+  for (const v of vals){
     if (v === undefined || v === null || v === '') continue;
     const n = Number(v);
     if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
   return 0;
 }
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-  }));
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
