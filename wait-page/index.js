@@ -8,7 +8,7 @@ module.exports = async function (context, req) {
   const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
   const returnUrl = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
-  const userParam = (req.query.user || "").trim(); // 
+  const userParam = (req.query.user || "").trim(); // user can be email or userId
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
@@ -19,11 +19,10 @@ module.exports = async function (context, req) {
 
   if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userParam) {
     try {
-      // NEW: detect if `userParam` is already an Okta userId (starts with 00u)
+      // Detect if the input is an Okta userId or email
       if (userParam.startsWith("00u")) {
         userId = userParam;
       } else {
-        // otherwise treat as email and look up userId
         userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userParam);
       }
 
@@ -85,14 +84,13 @@ module.exports = async function (context, req) {
       if (assigned && returnUrl) {
         sessionStorage.setItem(key, '0');
         setTimeout(() => location.href = returnUrl, seconds * 1000);
+      } else if (!assigned) {
+        // Do nothing extra — error message is already rendered in HTML if not assigned
       } else {
         attempts++;
         sessionStorage.setItem(key, String(attempts));
         if (attempts < max) {
           setTimeout(() => location.reload(), seconds * 1000);
-        } else {
-          var errElem = document.getElementById("final-error");
-          if (errElem) errElem.classList.remove("hide");
         }
       }
     })();
@@ -107,7 +105,7 @@ module.exports = async function (context, req) {
     <div class="spinner" aria-hidden="true"></div>
     <p>${subtitle}</p>
 
-    <p id="final-error" class="error hide">You are not assigned to this application.</p>
+    ${assigned === false ? `<p class="error">You are not assigned to this application.</p>` : ""}
 
     <div class="foot">
       If your applications are not available after the page refreshes, please contact your support team.
@@ -184,7 +182,8 @@ function isUserAssignedToApp(domain, token, appId, userId) {
     }, res => {
       if (res.statusCode === 200) resolve(true);
       else if (res.statusCode === 404) resolve(false);
-      else reject(new Error(`Unexpected status: ${res.statusCode}`));
+      else reject(new Error("Unexpected status: " + res.statusCode));
     }).on("error", reject);
   });
 }
+
