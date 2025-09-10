@@ -1,15 +1,15 @@
 module.exports = async function (context, req) {
-  const seconds     = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);  // delay before refresh/redirect
-  const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);     // stop after N tries
+  const seconds     = toNum(req.query.s,   process.env.AUTO_RETRY_SECONDS, 5);
+  const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
   const returnUrl   = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
 
-  // meta refresh fallback (kept for robustness)
+  // Only add meta refresh if a return URL exists. Otherwise JS handles retry with a cap.
   const metaRefresh = returnUrl
-  ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
-  : `<meta http-equiv="refresh" content="${seconds}">`;
+    ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">`
+    : "";
 
   const html = `<!doctype html>
 <html lang="en">
@@ -20,7 +20,7 @@ module.exports = async function (context, req) {
   ${metaRefresh}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
-    :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; }
+    :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
     *{box-sizing:border-box}
     html,body{height:100%; overflow:hidden}
     body{
@@ -42,14 +42,15 @@ module.exports = async function (context, req) {
     }
     @keyframes spin{to{transform:rotate(360deg)}}
     .foot{margin-top:22px; font-size:12px; color:var(--muted)}
+    .banner{margin:-6px 0 12px; padding:8px 10px; border-radius:6px; background:#fff7ed; border:1px solid #fed7aa; color:var(--warn); font-size:13px}
+    .hide{display:none}
   </style>
   <script>
     (function(){
-      // Silent retry cap using sessionStorage (no text changes)
       var seconds = ${Number(seconds)};
       var maxAttempts = ${Number(maxAttempts)};
       var returnUrl = ${JSON.stringify(returnUrl)};
-      var key = 'nts-wait-attempts:' + location.pathname;
+      var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
       function refreshOnce(){
@@ -58,12 +59,18 @@ module.exports = async function (context, req) {
       }
 
       function maybeRefresh(){
+        // show warning only when no return URL was supplied
+        if (!returnUrl) {
+          var warn = document.getElementById('no-return');
+          if (warn) warn.classList.remove('hide');
+        }
+
         attempts++;
         sessionStorage.setItem(key, String(attempts));
         if (attempts <= maxAttempts) {
           setTimeout(refreshOnce, seconds * 1000);
         }
-        // else: stop quietly on this screen (no wording change)
+        // else: stop quietly on the page (no loop)
       }
 
       window.addEventListener('DOMContentLoaded', maybeRefresh);
@@ -75,6 +82,10 @@ module.exports = async function (context, req) {
     <img class="logo"
          src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75"
          alt="NTS Logo" />
+
+    <div id="no-return" class="banner hide">
+      No return URL was provided. We’ll retry a few times and then stop.
+    </div>
 
     <h1>${title}</h1>
     <div class="spinner" aria-hidden="true"></div>
