@@ -3,25 +3,22 @@ const https = require("https");
 module.exports = async function (context, req) {
   const OKTA_API_TOKEN = process.env.OKTA_API_TOKEN;
   const OKTA_DOMAIN = process.env.OKTA_DOMAIN;
-  const DEFAULT_APP_ID = process.env.OKTA_APP_ID;
 
+  const userInput = (req.query.user || "").trim();
+  const appId = (req.query.app || process.env.OKTA_APP_ID || "").trim();
   const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
-  const userInput = (req.query.user || "").trim();
-  const appId = (req.query.app || DEFAULT_APP_ID || "").trim();
-  const returnParam = (req.query.return || "").trim();
+  const returnUrl = (req.query.return || "").trim();
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
 
-  let assigned = null;
   let userId = null;
-  let errorMessage = "";
+  let assigned = null;
 
   if (OKTA_API_TOKEN && OKTA_DOMAIN && appId && userInput) {
     try {
-      // Detect if userInput is an Okta ID or an email
-      if (/^00u[a-zA-Z0-9]{17}$/.test(userInput)) {
+      if (/^00u[a-zA-Z0-9]+$/.test(userInput)) {
         userId = userInput;
       } else {
         userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userInput);
@@ -30,14 +27,14 @@ module.exports = async function (context, req) {
       if (userId) {
         assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, appId, userId);
       } else {
-        errorMessage = "User not found in Okta.";
+        assigned = false;
       }
     } catch (err) {
       context.log("Error during assignment check:", err);
-      errorMessage = "Error while checking user assignment.";
+      assigned = false;
     }
   } else {
-    errorMessage = "Missing required parameters or environment variables.";
+    assigned = false;
   }
 
   const html = `<!doctype html>
@@ -46,7 +43,7 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  ${assigned === true && returnParam ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnParam)}">` : ""}
+  ${assigned === true && returnUrl ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">` : ""}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
@@ -79,26 +76,14 @@ module.exports = async function (context, req) {
       var seconds = ${seconds};
       var max = ${maxAttempts};
       var assigned = ${assigned === true};
-
-      var params = new URLSearchParams(window.location.search);
-      var explicitReturn = params.get('return');
-      var storedReturn = sessionStorage.getItem('originalTarget');
-      var referrer = document.referrer;
-
-      var returnUrl = explicitReturn || storedReturn || referrer || '/';
-
-      // Save return target if not already saved
-      if (!storedReturn && (explicitReturn || referrer)) {
-        sessionStorage.setItem('originalTarget', explicitReturn || referrer);
-      }
-
+      var returnUrl = ${JSON.stringify(returnUrl)};
       var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
-      if (assigned) {
+      if (assigned && returnUrl) {
         sessionStorage.setItem(key, '0');
         setTimeout(() => location.href = returnUrl, seconds * 1000);
-      } else {
+      } else if (!assigned) {
         attempts++;
         sessionStorage.setItem(key, String(attempts));
         if (attempts < max) {
@@ -113,9 +98,7 @@ module.exports = async function (context, req) {
 </head>
 <body>
   <main class="card" role="status" aria-live="polite" aria-atomic="true">
-    <img class="logo"
-         src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75"
-         alt="NTS Logo" />
+    <img class="logo" src="https://ok9static.oktacdn.com/fs/bco/1/fs052l0any7gT4Pth417" alt="NTS Logo" />
     <h1>${title}</h1>
     <div class="spinner" aria-hidden="true"></div>
     <p>${subtitle}</p>
@@ -141,7 +124,6 @@ module.exports = async function (context, req) {
 };
 
 // -------------------- HELPERS --------------------
-
 function toNum(...vals) {
   for (const v of vals) {
     if (v === undefined || v === null || v === '') continue;
@@ -159,7 +141,6 @@ function escapeHtml(s) {
 
 function getUserIdByEmail(domain, token, email) {
   const url = `${domain}/api/v1/users?q=${encodeURIComponent(email)}&limit=1`;
-
   return new Promise((resolve, reject) => {
     https.get(url, {
       headers: {
@@ -172,14 +153,9 @@ function getUserIdByEmail(domain, token, email) {
       res.on("end", () => {
         try {
           const data = JSON.parse(body);
-          if (Array.isArray(data) && data.length > 0) {
-            resolve(data[0].id);
-          } else {
-            resolve(null);
-          }
-        } catch (e) {
-          reject(e);
-        }
+          if (Array.isArray(data) && data.length > 0) resolve(data[0].id);
+          else resolve(null);
+        } catch (e) { reject(e); }
       });
     }).on("error", reject);
   });
@@ -187,7 +163,6 @@ function getUserIdByEmail(domain, token, email) {
 
 function isUserAssignedToApp(domain, token, appId, userId) {
   const url = `${domain}/api/v1/apps/${appId}/users/${userId}`;
-
   return new Promise((resolve, reject) => {
     https.get(url, {
       headers: {
