@@ -3,12 +3,13 @@ const https = require("https");
 module.exports = async function (context, req) {
   const OKTA_API_TOKEN = process.env.OKTA_API_TOKEN;
   const OKTA_DOMAIN = process.env.OKTA_DOMAIN;
-  const APP_ID = process.env.OKTA_APP_ID;
+  const DEFAULT_APP_ID = process.env.OKTA_APP_ID;
 
   const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
-  const returnUrl = (req.query.return || process.env.DEFAULT_RETURN_URL || "").trim();
-  const userParam = (req.query.user || "").trim(); // user can be email or userId
+  const userInput = (req.query.user || "").trim();
+  const appId = (req.query.app || DEFAULT_APP_ID || "").trim();
+  const returnParam = (req.query.return || "").trim();
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
@@ -17,17 +18,17 @@ module.exports = async function (context, req) {
   let userId = null;
   let errorMessage = "";
 
-  if (OKTA_API_TOKEN && OKTA_DOMAIN && APP_ID && userParam) {
+  if (OKTA_API_TOKEN && OKTA_DOMAIN && appId && userInput) {
     try {
-      // Detect if the input is an Okta userId or email
-      if (userParam.startsWith("00u")) {
-        userId = userParam;
+      // Detect if userInput is an Okta ID or an email
+      if (/^00u[a-zA-Z0-9]{17}$/.test(userInput)) {
+        userId = userInput;
       } else {
-        userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userParam);
+        userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userInput);
       }
 
       if (userId) {
-        assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, APP_ID, userId);
+        assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, appId, userId);
       } else {
         errorMessage = "User not found in Okta.";
       }
@@ -45,7 +46,7 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  ${assigned === true && returnUrl ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">` : ""}
+  ${assigned === true && returnParam ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnParam)}">` : ""}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
@@ -71,26 +72,40 @@ module.exports = async function (context, req) {
     @keyframes spin{to{transform:rotate(360deg)}}
     .foot{margin-top:22px; font-size:12px; color:var(--muted)}
     .error{color:#b45309; margin-top:16px; font-size:14px}
+    .hide{display:none}
   </style>
   <script>
     (function(){
       var seconds = ${seconds};
       var max = ${maxAttempts};
       var assigned = ${assigned === true};
-      var returnUrl = ${JSON.stringify(returnUrl)};
+
+      var params = new URLSearchParams(window.location.search);
+      var explicitReturn = params.get('return');
+      var storedReturn = sessionStorage.getItem('originalTarget');
+      var referrer = document.referrer;
+
+      var returnUrl = explicitReturn || storedReturn || referrer || '/';
+
+      // Save return target if not already saved
+      if (!storedReturn && (explicitReturn || referrer)) {
+        sessionStorage.setItem('originalTarget', explicitReturn || referrer);
+      }
+
       var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
-      if (assigned && returnUrl) {
+      if (assigned) {
         sessionStorage.setItem(key, '0');
         setTimeout(() => location.href = returnUrl, seconds * 1000);
-      } else if (!assigned) {
-        // Do nothing extra — error message is already rendered in HTML if not assigned
       } else {
         attempts++;
         sessionStorage.setItem(key, String(attempts));
         if (attempts < max) {
           setTimeout(() => location.reload(), seconds * 1000);
+        } else {
+          var errElem = document.getElementById("final-error");
+          if (errElem) errElem.classList.remove("hide");
         }
       }
     })();
@@ -105,7 +120,7 @@ module.exports = async function (context, req) {
     <div class="spinner" aria-hidden="true"></div>
     <p>${subtitle}</p>
 
-    ${assigned === false ? `<p class="error">You are not assigned to this application.</p>` : ""}
+    <p id="final-error" class="error hide">You are not assigned to this application.</p>
 
     <div class="foot">
       If your applications are not available after the page refreshes, please contact your support team.
@@ -186,4 +201,3 @@ function isUserAssignedToApp(domain, token, appId, userId) {
     }).on("error", reject);
   });
 }
-
