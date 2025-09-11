@@ -4,11 +4,12 @@ module.exports = async function (context, req) {
   const OKTA_API_TOKEN = process.env.OKTA_API_TOKEN;
   const OKTA_DOMAIN = process.env.OKTA_DOMAIN;
 
+  // Capture user, app, and original target URL
   const userInput = (req.query.user || "").trim();
-  const appId = (req.query.app || process.env.OKTA_APP_ID || "").trim();
+  const appId = (req.query.app || "").trim();
+  const originalTarget = (req.query.return || req.query.RelayState || "").trim();
   const seconds = toNum(req.query.s, process.env.AUTO_RETRY_SECONDS, 5);
   const maxAttempts = toNum(req.query.max, process.env.MAX_ATTEMPTS, 9);
-  const returnUrl = (req.query.return || "").trim();
 
   const title = "Please wait while we set up your access…";
   const subtitle = "Your access will be ready in a moment.";
@@ -18,6 +19,7 @@ module.exports = async function (context, req) {
 
   if (OKTA_API_TOKEN && OKTA_DOMAIN && appId && userInput) {
     try {
+      // Detect if input is already Okta userId
       if (/^00u[a-zA-Z0-9]+$/.test(userInput)) {
         userId = userInput;
       } else {
@@ -43,7 +45,6 @@ module.exports = async function (context, req) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${title}</title>
-  ${assigned === true && returnUrl ? `<meta http-equiv="refresh" content="${seconds};url=${escapeHtml(returnUrl)}">` : ""}
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <style>
     :root{ --bg:#003d5c; --card:#ffffff; --fg:#0f172a; --muted:#5b6b7a; --brand:#003d5c; --shadow:0 8px 20px rgba(0,0,0,.15); --radius:6px; --warn:#b45309; }
@@ -76,7 +77,7 @@ module.exports = async function (context, req) {
       var seconds = ${seconds};
       var max = ${maxAttempts};
       var assigned = ${assigned === true};
-      var returnUrl = ${JSON.stringify(returnUrl)};
+      var returnUrl = ${JSON.stringify(originalTarget)};
       var key = 'nts-wait-attempts:' + location.pathname + location.search;
       var attempts = Number(sessionStorage.getItem(key) || '0');
 
