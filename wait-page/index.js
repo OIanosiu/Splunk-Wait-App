@@ -75,12 +75,6 @@ module.exports = async function (context, req) {
     var max = ${maxAttempts};
     var assigned = ${assigned === true};
     var returnUrl = ${JSON.stringify(originalTarget)};
-    var debugInfo = ${JSON.stringify(debugInfo)};
-    
-    // Debug logging
-    console.log('=== DEBUG INFO ===');
-    console.log('Server debug:', debugInfo);
-    console.log('Client vars:', {assigned, seconds, max, returnUrl});
     
     const params = new URLSearchParams(location.search);
     const userParam = params.get('user') || '';
@@ -88,41 +82,18 @@ module.exports = async function (context, req) {
     var key = 'nts-wait-attempts:' + (appParam || 'noapp') + ':' + (userParam || 'nouser');
 
     var attempts = Number(sessionStorage.getItem(key) || '0');
-    console.log('Current attempts:', attempts, 'Key:', key);
 
     function showFinalError(){
-      console.log('showFinalError() called');
       try {
         var errElem = document.getElementById("final-error");
+        if (errElem) errElem.classList.remove("hide");
         var spinner = document.querySelector(".spinner");
-        var subtitle = document.querySelector("p:not(.error):not(.foot)");
-        
-        console.log('Elements found:', {
-          errElem: !!errElem, 
-          spinner: !!spinner,
-          subtitle: !!subtitle
-        });
-        
-        if (errElem) {
-          errElem.classList.remove("hide");
-          console.log('Error element shown');
-        }
-        if (spinner) {
-          spinner.classList.add("hide");
-          console.log('Spinner hidden');
-        }
-        if (subtitle) {
-          subtitle.style.display = 'none';
-          console.log('Subtitle hidden');
-        }
-      } catch (e) {
-        console.error('Error in showFinalError:', e);
-      }
+        if (spinner) spinner.classList.add("hide");
+      } catch (e) {}
     }
 
     // If user is assigned and we have a return URL, redirect immediately
     if (assigned && returnUrl) {
-      console.log('User assigned, redirecting to:', returnUrl);
       sessionStorage.setItem(key, '0');
       setTimeout(function(){ location.href = returnUrl; }, seconds * 1000);
       return;
@@ -130,14 +101,10 @@ module.exports = async function (context, req) {
 
     // If we can't check (missing user or app params)
     var canCheck = Boolean(userParam && appParam);
-    console.log('Can check assignment:', canCheck, {userParam, appParam});
-    
     if (!canCheck) {
-      console.log('Cannot check assignment, retrying...');
       attempts++;
       sessionStorage.setItem(key, String(attempts));
       if (attempts >= max) { 
-        console.log('Max attempts reached (no check possible)');
         showFinalError(); 
         return; 
       }
@@ -147,27 +114,21 @@ module.exports = async function (context, req) {
 
     // We can check, but user is not assigned (assigned === false)
     if (assigned === false) {
-      console.log('User not assigned, attempt', attempts + 1, 'of', max);
       attempts++;
       sessionStorage.setItem(key, String(attempts));
-      
       if (attempts >= max) { 
-        console.log('Max attempts reached, showing error message');
         showFinalError(); 
         return; 
       }
       // Continue retrying for a bit in case assignment is still being processed
-      console.log('Will retry in', seconds, 'seconds');
       setTimeout(function(){ location.reload(); }, seconds * 1000);
       return;
     }
 
     // This shouldn't happen, but just in case assigned is null/undefined
-    console.log('Unexpected state - assigned is:', assigned);
     attempts++;
     sessionStorage.setItem(key, String(attempts));
     if (attempts >= max) { 
-      console.log('Max attempts reached (unexpected state)');
       showFinalError(); 
       return; 
     }
