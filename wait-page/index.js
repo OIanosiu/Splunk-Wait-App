@@ -23,7 +23,6 @@ module.exports = async function (context, req) {
       } else {
         userId = await getUserIdByEmail(OKTA_DOMAIN, OKTA_API_TOKEN, userInput);
       }
-
       if (userId) {
         assigned = await isUserAssignedToApp(OKTA_DOMAIN, OKTA_API_TOKEN, appId, userId);
       } else {
@@ -83,10 +82,12 @@ module.exports = async function (context, req) {
         sessionStorage.setItem(key, '0');
         setTimeout(() => location.href = returnUrl, seconds * 1000);
       } else if (!assigned) {
-        if (attempts + 1 >= max) {
+        if (attempts >= max) {
+          // stop retrying and show error
           sessionStorage.setItem(key, '0');
           var errElem = document.getElementById("final-error");
           if (errElem) errElem.classList.remove("hide");
+          document.querySelector(".spinner").classList.add("hide");
         } else {
           attempts++;
           sessionStorage.setItem(key, String(attempts));
