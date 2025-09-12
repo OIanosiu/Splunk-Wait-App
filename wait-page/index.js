@@ -92,26 +92,47 @@ module.exports = async function (context, req) {
       } catch (e) {}
     }
 
+    // If user is assigned and we have a return URL, redirect immediately
     if (assigned && returnUrl) {
       sessionStorage.setItem(key, '0');
       setTimeout(function(){ location.href = returnUrl; }, seconds * 1000);
       return;
     }
 
+    // If we can't check (missing user or app params)
     var canCheck = Boolean(userParam && appParam);
-
     if (!canCheck) {
       attempts++;
       sessionStorage.setItem(key, String(attempts));
-      if (attempts >= max) { showFinalError(); return; }
+      if (attempts >= max) { 
+        showFinalError(); 
+        return; 
+      }
       setTimeout(function(){ location.reload(); }, seconds * 1000);
       return;
     }
 
+    // We can check, but user is not assigned (assigned === false)
+    if (assigned === false) {
+      attempts++;
+      sessionStorage.setItem(key, String(attempts));
+      if (attempts >= max) { 
+        showFinalError(); 
+        return; 
+      }
+      // Continue retrying for a bit in case assignment is still being processed
+      setTimeout(function(){ location.reload(); }, seconds * 1000);
+      return;
+    }
+
+    // This shouldn't happen, but just in case assigned is null/undefined
     attempts++;
     sessionStorage.setItem(key, String(attempts));
-    if (attempts >= max) { showFinalError(); return; }
-    setTimeout(function(){ location.reload(), seconds * 1000 });
+    if (attempts >= max) { 
+      showFinalError(); 
+      return; 
+    }
+    setTimeout(function(){ location.reload(); }, seconds * 1000);
   })();
 </script>
 </head>
