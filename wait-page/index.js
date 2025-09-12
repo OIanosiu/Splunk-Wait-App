@@ -75,14 +75,10 @@ module.exports = async function (context, req) {
     var max = ${maxAttempts};
     var assigned = ${assigned === true};
     var returnUrl = ${JSON.stringify(originalTarget)};
-
-    // Build a stable attempts key that does NOT depend on the whole query string
-    function getParam(name){
-      var m = new RegExp('[?&]' + name.replace(/[.[\]]/g,'\\$&') + '=([^&]*)').exec(location.search);
-      return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
-    }
-    var userParam = getParam('user'); // email or 00u...
-    var appParam  = getParam('app');  // Okta App ID
+    
+    const params = new URLSearchParams(location.search);
+    const userParam = params.get('user') || '';
+    const appParam  = params.get('app') || '';
     var key = 'nts-wait-attempts:' + (appParam || 'noapp') + ':' + (userParam || 'nouser');
 
     var attempts = Number(sessionStorage.getItem(key) || '0');
@@ -97,14 +93,11 @@ module.exports = async function (context, req) {
     }
 
     if (assigned && returnUrl) {
-      // Success: clear attempts and redirect once
       sessionStorage.setItem(key, '0');
       setTimeout(function(){ location.href = returnUrl; }, seconds * 1000);
       return;
     }
 
-    // Not assigned (or couldn't check):
-    // If we're missing the essentials, don't loop forever count and then stop
     var canCheck = Boolean(userParam && appParam);
 
     if (!canCheck) {
@@ -115,11 +108,10 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // We tried to check but assignment is false/null:
     attempts++;
     sessionStorage.setItem(key, String(attempts));
     if (attempts >= max) { showFinalError(); return; }
-    setTimeout(function(){ location.reload(); }, seconds * 1000);
+    setTimeout(function(){ location.reload(), seconds * 1000 });
   })();
 </script>
 </head>
