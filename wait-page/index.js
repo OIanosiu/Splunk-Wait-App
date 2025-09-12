@@ -4,7 +4,6 @@ module.exports = async function (context, req) {
   const OKTA_API_TOKEN = process.env.OKTA_API_TOKEN;
   const OKTA_DOMAIN = process.env.OKTA_DOMAIN;
 
-  // Capture user, app, and original target URL
   const userInput = (req.query.user || "").trim();
   const appId = (req.query.app || "").trim();
   const originalTarget = (req.query.return || req.query.RelayState || "").trim();
@@ -19,7 +18,6 @@ module.exports = async function (context, req) {
 
   if (OKTA_API_TOKEN && OKTA_DOMAIN && appId && userInput) {
     try {
-      // Detect if input is already Okta userId
       if (/^00u[a-zA-Z0-9]+$/.test(userInput)) {
         userId = userInput;
       } else {
@@ -85,13 +83,14 @@ module.exports = async function (context, req) {
         sessionStorage.setItem(key, '0');
         setTimeout(() => location.href = returnUrl, seconds * 1000);
       } else if (!assigned) {
-        attempts++;
-        sessionStorage.setItem(key, String(attempts));
-        if (attempts < max) {
-          setTimeout(() => location.reload(), seconds * 1000);
-        } else {
+        if (attempts + 1 >= max) {
+          sessionStorage.setItem(key, '0');
           var errElem = document.getElementById("final-error");
           if (errElem) errElem.classList.remove("hide");
+        } else {
+          attempts++;
+          sessionStorage.setItem(key, String(attempts));
+          setTimeout(() => location.reload(), seconds * 1000);
         }
       }
     })();
@@ -134,18 +133,12 @@ function toNum(...vals) {
   return 0;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[c]);
-}
-
 function getUserIdByEmail(domain, token, email) {
-  const url = `${domain}/api/v1/users?q=${encodeURIComponent(email)}&limit=1`;
+  const url = domain + "/api/v1/users?q=" + encodeURIComponent(email) + "&limit=1";
   return new Promise((resolve, reject) => {
     https.get(url, {
       headers: {
-        "Authorization": `SSWS ${token}`,
+        "Authorization": "SSWS " + token,
         "Accept": "application/json"
       }
     }, res => {
@@ -163,11 +156,11 @@ function getUserIdByEmail(domain, token, email) {
 }
 
 function isUserAssignedToApp(domain, token, appId, userId) {
-  const url = `${domain}/api/v1/apps/${appId}/users/${userId}`;
+  const url = domain + "/api/v1/apps/" + appId + "/users/" + userId;
   return new Promise((resolve, reject) => {
     https.get(url, {
       headers: {
-        "Authorization": `SSWS ${token}`,
+        "Authorization": "SSWS " + token,
         "Accept": "application/json"
       }
     }, res => {
