@@ -1,7 +1,4 @@
 module.exports = async function (context, req) {
-  const subtitle =
-    "If this is your first time logging in to Splunk, we are busy setting up your access. Please try to log in again in a few minutes. Otherwise, please get in touch with support@nts.eu.";
-
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -41,7 +38,7 @@ module.exports = async function (context, req) {
       text-align:center;
     }
     .logo {
-      margin:0 auto 40px; /* increased bottom margin for more space */
+      margin:0 auto 40px;
       display:block;
       height:65px;
     }
@@ -49,6 +46,7 @@ module.exports = async function (context, req) {
       color:var(--muted);
       font-size:16px;
       line-height:1.6;
+      white-space:pre-line; /* preserves line breaks */
     }
   </style>
 </head>
@@ -57,7 +55,8 @@ module.exports = async function (context, req) {
     <img class="logo"
          src="https://register.nts.eu/_next/image?url=https%3A%2F%2Fok9static.oktacdn.com%2Ffs%2Fbco%2F1%2Ffs052l0any7gT4Pth417&w=640&q=75"
          alt="NTS Logo" />
-    <p>${subtitle}</p>
+
+    <p>If this is your first time logging in to Splunk, please try to log in again in a few minutes – we are busy setting up your access.\n\nOtherwise, please get in touch with support@nts.eu.</p>
   </main>
 </body>
 </html>`;
